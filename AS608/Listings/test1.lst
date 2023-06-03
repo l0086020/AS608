@@ -1,0 +1,722 @@
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE TEST1
+OBJECT MODULE PLACED IN .\Objects\test1.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE test1.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listin
+                    -gs\test1.lst) TABS(2) OBJECT(.\Objects\test1.obj)
+
+line level    source
+
+   1          #include<reg52.h>
+   2          #include<intrins.h>
+   3          #define MAIN_Fosc 11059200//ºê¶¨ÒåÖ÷Ê±ÖÓÆµÂÊ
+   4          #define LINE1         0x80                        //1602ÆÁµØÖ·¶¨Òå µÚÒ»ÐÐµØÖ·
+   5          #define LINE2         0xc0                        //1602ÆÁµØÖ·¶¨Òå µÚ¶þÐÐµØÖ·
+   6          #define DataPort P0          //LCD1602²Ù×÷Î»¶¨Òå
+   7          
+   8          typedef unsigned char INT8U;
+   9          typedef unsigned char uchar;
+  10          typedef unsigned int INT16U;
+  11          typedef unsigned int uint;
+  12          
+  13          sbit EN = P3^4;     //¶ÁÐ´Êý¾ÝÊ¹ÄÜ   0£ºÍ£Ö¹ 1£ºÆô¶¯
+  14          sbit RS = P3^5;     //¼Ä´æÆ÷Ñ¡Ôñ 0:Ö¸Áî¼Ä´æÆ÷ 1:Êý¾Ý¼Ä´æÆ÷
+  15          sbit RW = P3^6;     //¶ÁÐ´¿ØÖÆ 0£ºÐ´  1£º¶Á
+  16          sbit KEY_DOWN=P2^4;
+  17          sbit KEY_OK=P2^2;
+  18          sbit KEY_CANCEL=P2^0;
+  19          sbit beep=P2^6;
+  20          
+  21          uchar flag=0;
+  22          extern char local_date=0;  //È«¾Ö±äÁ¿£¬µ±Ç°¼ýÍ·Î»ÖÃ
+  23          extern unsigned int finger_id = 0;
+  24          
+  25          //uart º¯Êý
+  26          void Uart_Init(void)
+  27          {
+  28   1          SCON=0x50;   //UART·½Ê½1:8Î»UART;   REN=1:ÔÊÐí½ÓÊÕ
+  29   1          PCON=0x00;   //SMOD=0:²¨ÌØÂÊ²»¼Ó±¶
+  30   1          TMOD=0x20;   //T1·½Ê½2,ÓÃÓÚUART²¨ÌØÂÊ
+  31   1          TH1=0xFD;
+  32   1          TL1=0xFD;   //UART²¨ÌØÂÊÉèÖÃ:FDFD£¬9600;FFFF,57600
+  33   1          TR1=1;         //ÔÊÐíT1¼ÆÊý
+  34   1          EA=1;         //¿ª×ÜÖÐ¶Ï
+  35   1      }
+  36          
+  37          void Uart_Send_Byte(unsigned char c)//UART Send a byte
+  38          {
+  39   1              SBUF = c;
+  40   1              while(!TI);                //·¢ËÍÍêÎª1
+  41   1              TI = 0;
+  42   1      }
+  43          
+  44          unsigned char Uart_Receive_Byte()//UART Receive a byteg
+  45          {        
+  46   1              unsigned char dat;
+  47   1              while(!RI);         //½ÓÊÕÍêÎª1
+  48   1              RI = 0;
+  49   1              dat = SBUF;
+  50   1              return (dat);
+  51   1      }
+  52          //ÑÓÊ±º¯Êý
+  53          void Delay_us(int i)
+  54          {
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 2   
+
+  55   1              while(--i);
+  56   1      }
+  57          
+  58          void Delay_ms(INT16U ms)
+  59          {
+  60   1           INT16U i;
+  61   1               do{
+  62   2                    i = MAIN_Fosc / 96000;
+  63   2                        while(--i);   //96T per loop
+  64   2           }while(--ms);
+  65   1      }
+  66          
+  67          //·äÃùÆ÷º¯Êý
+  68          void Beep_Times(unsigned char times)
+  69          {
+  70   1              unsigned char i=0;
+  71   1              for(i=0;i<times;i++)
+  72   1              {
+  73   2                       beep=0;
+  74   2                       Delay_ms(200);
+  75   2                       beep=1;
+  76   2                       Delay_ms(200);
+  77   2              }
+  78   1      }
+  79          
+  80          //°´¼ü²Ù×÷º¯Êý
+  81          void Key_Init(void)
+  82          {
+  83   1          //¶¨Òå°´¼üÊäÈë¶Ë¿Ú
+  84   1              KEY_DOWN=1;                // ÏÂÒ»Ïî
+  85   1              KEY_OK=1;                // È·ÈÏ
+  86   1              KEY_CANCEL=1;        // È¡Ïû
+  87   1      }
+  88          
+  89          // 1602Òº¾§º¯Êý
+  90          //Ð´Ö¸Áî
+  91          void LCD1602_WriteCMD(unsigned char cmd)  
+  92          {
+  93   1                EN=0;
+  94   1                RS=0;
+  95   1                RW=0;
+  96   1                Delay_us(10);
+  97   1                EN=1;
+  98   1                Delay_us(10);
+  99   1                DataPort=cmd;
+ 100   1                Delay_us(10);
+ 101   1                EN=0;
+ 102   1      }
+ 103          //Ð´Êý¾Ý
+ 104          void LCD1602_WriteDAT(unsigned char dat)
+ 105          {
+ 106   1                EN=0;
+ 107   1                RS=1;
+ 108   1                RW=0;
+ 109   1                Delay_us(10);
+ 110   1                EN=1;
+ 111   1                Delay_us(10);
+ 112   1                DataPort=dat;
+ 113   1                Delay_us(10);
+ 114   1                EN=0;
+ 115   1      }
+ 116          //Òº¾§·±Ã¦¼ì²â
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 3   
+
+ 117          void LCD1602_CheckBusy(void)
+ 118          {
+ 119   1              
+ 120   1              uchar busy;
+ 121   1              DataPort=0xff;
+ 122   1              RS=0;
+ 123   1              RW=1;
+ 124   1              do
+ 125   1              {
+ 126   2                      EN=1;
+ 127   2                      busy=DataPort;
+ 128   2                      EN=0;
+ 129   2              }while(busy&0x80);
+ 130   1              
+ 131   1      }
+ 132          //Òº¾§³õÊ¼»¯º¯Êý
+ 133          void LCD1602_Init(void)  
+ 134          {
+ 135   1              Delay_ms(15);                      //ÉÏµçÑÓÊ±15ms
+ 136   1                LCD1602_WriteCMD(0x38); //Ð´ÏÔÊ¾Ö¸Áî(²»¼ì²âÃ¦ÐÅºÅ)
+ 137   1                Delay_ms(5);
+ 138   1                LCD1602_CheckBusy();
+ 139   1                LCD1602_WriteCMD(0x38); //Ð´ÏÔÊ¾Ö¸Áî
+ 140   1                LCD1602_CheckBusy();
+ 141   1                LCD1602_WriteCMD(0x01); //ÇåÆÁ
+ 142   1                LCD1602_CheckBusy();
+ 143   1                LCD1602_WriteCMD(0x06); //ÏÔÊ¾¹â±êÒÆ¶¯ÉèÖÃ
+ 144   1                LCD1602_CheckBusy();
+ 145   1                LCD1602_WriteCMD(0x0c); //ÏÔÊ¾¿ª¼°¹â±êÉèÖÃ  
+ 146   1      }
+ 147          
+ 148          //Òº¾§ÏÔÊ¾º¯Êý                Èë¿Ú²ÎÊý£ºaddrÆðÊ¼µØÖ·£¬pointerÖ¸ÕëµØÖ·£¬indexÏÂ±ê£¬num¸öÊý
+ 149          void LCD1602_Display(unsigned char addr,unsigned char* pointer,unsigned char index,unsigned char num)
+ 150          {
+ 151   1                unsigned char i;
+ 152   1                LCD1602_CheckBusy();        //ÅÐ¶ÏÃ¦ÐÅºÅ
+ 153   1                LCD1602_WriteCMD(addr);        //Ð´ÈëµØÖ·
+ 154   1                for(i=0;i<num;i++)                //Ð´ÈëÊý¾Ý
+ 155   1                {
+ 156   2                   LCD1602_CheckBusy();                           //ÅÐ¶ÏÃ¦ÐÅºÅ
+ 157   2                   LCD1602_WriteDAT(pointer[index+i]);//Ð´ÈëÊý¾Ý     
+ 158   2                }
+ 159   1      }
+ 160          
+ 161          //AS608Ö¸ÎÆÄ£¿é
+ 162          volatile unsigned char AS608_RECEICE_BUFFER[32]; //volatile:ÏµÍ³×ÜÊÇÖØÐÂ´ÓËüËùÔÚµÄÄÚ´æ¶ÁÈ¡Êý¾Ý£¬¼´Ê¹ËüÇ°Ãæ
+             -µÄÖ¸Áî¸Õ¸Õ´Ó¸Ã´¦¶ÁÈ¡¹ýÊý¾Ý
+ 163          
+ 164          //FINGERPRINTÍ¨ÐÅÐ­Òé¶¨Òå
+ 165          code unsigned char AS608_Get_Device[10] ={0x01,0x00,0x07,0x13,0x00,0x00,0x00,0x00,0x00,0x1b};//¿ÚÁîÑéÖ¤
+ 166          code unsigned char AS608_Pack_Head[6] = {0xEF,0x01,0xFF,0xFF,0xFF,0xFF};  //Ð­Òé°üÍ·
+ 167          code unsigned char AS608_Get_Img[6] = {0x01,0x00,0x03,0x01,0x00,0x05};    //»ñµÃÖ¸ÎÆÍ¼Ïñ
+ 168          code unsigned char AS608_Get_Templete_Count[6] ={0x01,0x00,0x03,0x1D,0x00,0x21 }; //»ñµÃÄ£°æ×ÜÊý
+ 169          code unsigned char AS608_Search[11]={0x01,0x00,0x08,0x04,0x01,0x00,0x00,0x03,0xE7,0x00,0xF8}; //ËÑË÷Ö¸ÎÆËÑ
+             -Ë÷·¶Î§0 - 999,Ê¹ÓÃBUFFER1ÖÐµÄÌØÕ÷ÂëËÑË÷
+ 170          code unsigned char AS608_Search_0_9[11]={0x01,0x00,0x08,0x04,0x01,0x00,0x00,0x00,0x13,0x00,0x21}; //ËÑË÷0-
+             -9ºÅÖ¸ÎÆ
+ 171          code unsigned char AS608_Img_To_Buffer1[7]={0x01,0x00,0x04,0x02,0x01,0x00,0x08}; //½«Í¼Ïñ·ÅÈëµ½BUFFER1
+ 172          code unsigned char AS608_Img_To_Buffer2[7]={0x01,0x00,0x04,0x02,0x02,0x00,0x09}; //½«Í¼Ïñ·ÅÈëµ½BUFFER2
+ 173          code unsigned char AS608_Reg_Model[6]={0x01,0x00,0x03,0x05,0x00,0x09}; //½«BUFFER1¸úBUFFER2ºÏ³ÉÌØÕ÷Ä£°æ
+ 174          code unsigned char AS608_Delete_All_Model[6]={0x01,0x00,0x03,0x0d,0x00,0x11};//É¾³ýÖ¸ÎÆÄ£¿éÀïËùÓÐµÄÄ£°æ
+ 175          volatile unsigned char  AS608_Save_Finger[9]={0x01,0x00,0x06,0x06,0x01,0x00,0x0B,0x00,0x19};//½«BUFFER1ÖÐµ
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 4   
+
+             -ÄÌØÕ÷Âë´æ·Åµ½Ö¸¶¨µÄÎ»ÖÃ
+ 176          
+ 177          //·¢ËÍ°üÍ·
+ 178          void AS608_Cmd_Send_Pack_Head(void)
+ 179          {
+ 180   1              int i;        
+ 181   1              for(i=0;i<6;i++) //°üÍ·
+ 182   1              {
+ 183   2                      Uart_Send_Byte(AS608_Pack_Head[i]);   
+ 184   2              }               
+ 185   1      }
+ 186          
+ 187          //·¢ËÍÖ¸Áî
+ 188          void AS608_Cmd_Check(void)
+ 189          {
+ 190   1              int i=0;
+ 191   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 192   1              for(i=0;i<10;i++)
+ 193   1              {               
+ 194   2                      Uart_Send_Byte(AS608_Get_Device[i]);
+ 195   2              }
+ 196   1      }
+ 197          
+ 198          //½ÓÊÕ·´À¡Êý¾Ý»º³å
+ 199          void AS608_Receive_Data(unsigned char ucLength)
+ 200          {
+ 201   1              unsigned char i;                                 
+ 202   1              for (i=0;i<ucLength;i++)
+ 203   1                      AS608_RECEICE_BUFFER[i] = Uart_Receive_Byte();
+ 204   1      }
+ 205          
+ 206          //FINGERPRINT_»ñµÃÖ¸ÎÆÍ¼ÏñÃüÁî
+ 207          void AS608_Cmd_Get_Img(void)
+ 208          {
+ 209   1          unsigned char i;
+ 210   1          AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 211   1          for(i=0;i<6;i++) //·¢ËÍÃüÁî 0x1d
+ 212   1              {
+ 213   2             Uart_Send_Byte(AS608_Get_Img[i]);
+ 214   2              }
+ 215   1      }
+ 216          
+ 217          //½«Í¼Ïñ×ª»»³ÉÌØÕ÷Âë´æ·ÅÔÚBuffer1ÖÐ
+ 218          void FINGERPRINT_Cmd_Img_To_Buffer1(void)
+ 219          {
+ 220   1               unsigned char i;
+ 221   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·      
+ 222   1                 for(i=0;i<7;i++)   //·¢ËÍÃüÁî ½«Í¼Ïñ×ª»»³É ÌØÕ÷Âë ´æ·ÅÔÚ CHAR_buffer1
+ 223   1              {
+ 224   2                      Uart_Send_Byte(AS608_Img_To_Buffer1[i]);
+ 225   2              }
+ 226   1      }
+ 227          //½«Í¼Ïñ×ª»»³ÉÌØÕ÷Âë´æ·ÅÔÚBuffer2ÖÐ
+ 228          void FINGERPRINT_Cmd_Img_To_Buffer2(void)
+ 229          {
+ 230   1              unsigned char i;
+ 231   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 232   1              for(i=0;i<7;i++)   //·¢ËÍÃüÁî ½«Í¼Ïñ×ª»»³É ÌØÕ÷Âë ´æ·ÅÔÚ CHAR_buffer1
+ 233   1              {
+ 234   2                      Uart_Send_Byte(AS608_Img_To_Buffer2[i]);
+ 235   2              }
+ 236   1      }
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 5   
+
+ 237          
+ 238          //ËÑË÷È«²¿ÓÃ»§999Ã¶
+ 239          void AS608_Cmd_Search_Finger(void)
+ 240          {
+ 241   1              unsigned char i;                       
+ 242   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 243   1              for(i=0;i<11;i++)
+ 244   1              {
+ 245   2                      Uart_Send_Byte(AS608_Search[i]);   
+ 246   2              }
+ 247   1      }
+ 248          
+ 249          //×ª»»³ÉÌØÕ÷Âë
+ 250          void AS608_Cmd_Reg_Model(void)
+ 251          {
+ 252   1              unsigned char i;                              
+ 253   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 254   1              for(i=0;i<6;i++)
+ 255   1              {
+ 256   2                      Uart_Send_Byte(AS608_Reg_Model[i]);   
+ 257   2              }
+ 258   1      }
+ 259          
+ 260          //É¾³ýÖ¸ÎÆÄ£¿éÀïµÄËùÓÐÖ¸ÎÆÄ£°æ
+ 261          void FINGERPRINT_Cmd_Delete_All_Model(void)
+ 262          {
+ 263   1              unsigned char i;   
+ 264   1          AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·   
+ 265   1          for(i=0;i<6;i++) //ÃüÁîÉ¾³ýÖ¸ÎÆÄ£°æ
+ 266   1              {
+ 267   2                    Uart_Send_Byte(AS608_Delete_All_Model[i]);   
+ 268   2              }        
+ 269   1      }
+ 270          
+ 271          //±£´æÖ¸ÎÆ
+ 272          void AS608_Cmd_Save_Finger( unsigned int storeID )
+ 273          {
+ 274   1              unsigned long temp = 0;
+ 275   1              unsigned char i;
+ 276   1              AS608_Save_Finger[5] =(storeID&0xFF00)>>8;
+ 277   1              AS608_Save_Finger[6] = (storeID&0x00FF);
+ 278   1              for(i=0;i<7;i++)   //¼ÆËãÐ£ÑéºÍ
+ 279   1                      temp = temp + AS608_Save_Finger[i];
+ 280   1              AS608_Save_Finger[7]=(temp & 0x00FF00) >> 8; //´æ·ÅÐ£ÑéÊý¾Ý
+ 281   1              AS608_Save_Finger[8]= temp & 0x0000FF;                  
+ 282   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·        
+ 283   1              for(i=0;i<9;i++)  
+ 284   1                      Uart_Send_Byte(AS608_Save_Finger[i]);      //·¢ËÍÃüÁî ½«Í¼Ïñ×ª»»³É ÌØÕ÷Âë ´æ·ÅÔÚ CHAR_buff
+             -er1
+ 285   1      }
+ 286          
+ 287          //²é¿´µ±Ç°Ö¸ÎÆ¿âÖÐÖ¸ÎÆÄ£°åÊý
+ 288          int AS608_number_of_fingers()
+ 289          {
+ 290   1               int num=1;//Ä¬ÈÏÄ£°å¿âÖÐÓÐÒ»¸öÄ£°å
+ 291   1              uchar i=0;
+ 292   1              AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 293   1              for(i=0;i<6;i++)
+ 294   1              {
+ 295   2                        Uart_Send_Byte(AS608_Get_Templete_Count[i]);
+ 296   2              }
+ 297   1              AS608_RECEICE_BUFFER[9]=1;//·½±ãºóÐøÅÐ¶ÏÊÇ·ñ½ÓÊÕ³É¹¦
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 6   
+
+ 298   1              AS608_Receive_Data(14);//½ÓÊÕÊý¾Ý
+ 299   1              if(AS608_RECEICE_BUFFER[9]==0) //½ÓÊÕ³É¹¦
+ 300   1              {
+ 301   2                       num=AS608_RECEICE_BUFFER[10]*256+AS608_RECEICE_BUFFER[11];//Æ´½ÓÄ£°å×Ü¸öÊý               
+             -         
+ 302   2              }
+ 303   1              return num;
+ 304   1      }
+ 305          //ÁíÒ»ÖÖ·½·¨²é¿´Ö¸ÎÆ¿âÖÐÊÇ·ñÓÐÄ£°å //±¾À´Ó¦¸Ã²é¿´ËùÓÐ1000¸öÄ£°åÎ»ÖÃÊÇ·ñ´æÔÚÄ£°å£¬µ«Ò»°ãÖ»ÓÃµÃµ½Ç°256¸ö£¬¹Ê
+             -´Ó¼ò
+ 306          /*
+ 307          uchar AS608_notEmpty()
+ 308          {
+ 309                   uchar exist=0;
+ 310                  char i=0;
+ 311                  AS608_Cmd_Send_Pack_Head(); //·¢ËÍÍ¨ÐÅÐ­Òé°üÍ·
+ 312                  for(i=0;i<7;i++)
+ 313                  {
+ 314                            Uart_Send_Byte(AS608_num_of_finger_in_lib1[i]);
+ 315                  }
+ 316                  AS608_Receive_Data(10);//½ÓÊÕÇ°10byteÊý¾Ý,³ýµÚ10×Ö½ÚµÄÈ·ÈÏÂëÍâ£¬ÆäÓàÈ«²¿¶ªÆú
+ 317                  if(AS608_RECEICE_BUFFER[9]==0) //½ÓÊÕ³É¹¦
+ 318                  {
+ 319                  AS608_Receive_Data(32);//½ÓÊÕºóÐø32byteÊý¾Ý£¬´Ë¼´0~255¸öÄ£°åÎªÊÇ·ñ´æÔÚÖ¸ÎÆÄ£°åµÄÊý¾Ý
+ 320                  for(i=0;i<32;i++)//²é¿´Õâ32byteÊý¾Ý£¬ÈÎºÎÒ»¸öÎ»ÖÃ´æÔÚÄ£°åÔò·µ»ØÖµÎªÕæ£¬·ñÔòÎª¼Ù
+ 321                  {
+ 322                           if(AS608_RECEICE_BUFFER[i])
+ 323                                  exist=1;
+ 324                  }
+ 325                  return exist;
+ 326                  }
+ 327          }
+ 328          */
+ 329          //Ìí¼ÓÖ¸ÎÆ
+ 330          void AS608_Add_Fingerprint()
+ 331          {
+ 332   1              unsigned char id_show[]={0,0,0};
+ 333   1              LCD1602_WriteCMD(0x01); //ÇåÆÁ  
+ 334   1              while(1)
+ 335   1              {
+ 336   2                      LCD1602_Display(0x80,"   Add  finger  ",0,16);
+ 337   2                      LCD1602_Display(0xc0,"    ID is       ",0,16);
+ 338   2                      //°´·µ»Ø¼üÖ±½Ó»Øµ½Ö÷²Ëµ¥
+ 339   2                      if(KEY_CANCEL == 0)
+ 340   2                      {
+ 341   3                               Delay_ms(5);
+ 342   3                               if(KEY_CANCEL == 0)
+ 343   3                               {
+ 344   4                                       while(KEY_CANCEL==0);
+ 345   4                                       break;
+ 346   4                               }         
+ 347   3                      }
+ 348   2      
+ 349   2                      //°´ÇÐ»»¼üÖ¸ÎÆiDÖµ¼Ó1
+ 350   2                      if(KEY_DOWN == 0)
+ 351   2                      {
+ 352   3                              Delay_ms(5);
+ 353   3                              if(KEY_DOWN == 0)
+ 354   3                              {
+ 355   4                                      while(KEY_DOWN==0);
+ 356   4                                      if(finger_id == 1000)
+ 357   4                                      {
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 7   
+
+ 358   5                                              finger_id = 1;
+ 359   5                                      }
+ 360   4                                      else
+ 361   4                                              finger_id = finger_id + 1;
+ 362   4                              }               
+ 363   3                      }
+ 364   2      
+ 365   2                       //Ö¸ÎÆiDÖµÏÔÊ¾´¦Àí
+ 366   2                       LCD1602_WriteCMD(0xc0+10);
+ 367   2                       LCD1602_WriteDAT(finger_id/100+48);
+ 368   2                      LCD1602_WriteDAT(finger_id%100/10+48);
+ 369   2                       LCD1602_WriteDAT(finger_id%100%10+48);
+ 370   2      
+ 371   2                       //°´È·ÈÏ¼ü¿ªÊ¼Â¼ÈëÖ¸ÎÆÐÅÏ¢                                          
+ 372   2                       if(KEY_OK == 0)
+ 373   2                       {
+ 374   3                       Delay_ms(5);
+ 375   3                       if(KEY_OK == 0)
+ 376   3                        {        
+ 377   4                                      while(KEY_OK==0);
+ 378   4                                        LCD1602_Display(0x80," Please  finger ",0,16);
+ 379   4                                        LCD1602_Display(0xc0,"                ",0,16);
+ 380   4                                      while(KEY_CANCEL == 1)
+ 381   4                                        {
+ 382   5                                                //°´ÏÂ·µ»Ø¼üÍË³öÂ¼Èë·µ»ØfingerIDµ÷Õû×´Ì¬   
+ 383   5                                              if(KEY_CANCEL == 0)
+ 384   5                                               {
+ 385   6                                                        Delay_ms(5);
+ 386   6                                                      if(KEY_CANCEL == 0)
+ 387   6                                                      {
+ 388   7                                                              while(KEY_CANCEL==0);
+ 389   7                                                                break;
+ 390   7                                                      }
+ 391   6                                                      
+ 392   6                                                }
+ 393   5                                              AS608_Cmd_Get_Img(); //»ñµÃÖ¸ÎÆÍ¼Ïñ
+ 394   5                                              AS608_Receive_Data(12);
+ 395   5                                              //ÅÐ¶Ï½ÓÊÕµ½µÄÈ·ÈÏÂë,µÈÓÚ0Ö¸ÎÆ»ñÈ¡³É¹¦
+ 396   5                                              if(AS608_RECEICE_BUFFER[9]==0)
+ 397   5                                               {
+ 398   6                                                      Delay_ms(100);
+ 399   6                                                      FINGERPRINT_Cmd_Img_To_Buffer1();
+ 400   6                                                  AS608_Receive_Data(12);
+ 401   6                                                      LCD1602_Display(0x80,"Successful entry",0,16);
+ 402   6                                                      Beep_Times(1);
+ 403   6                                                      Delay_ms(1000);
+ 404   6                                                      LCD1602_Display(0x80," Please  finger ",0,16);
+ 405   6                                                        LCD1602_Display(0xc0,"                ",0,16);
+ 406   6                                                      while(1)
+ 407   6                                                      {
+ 408   7                                                              if(KEY_CANCEL == 0)
+ 409   7                                                               {
+ 410   8                                                                        Delay_ms(5);
+ 411   8                                                                      if(KEY_CANCEL == 0)
+ 412   8                                                                      {
+ 413   9                                                                              while(KEY_CANCEL==0);
+ 414   9                                                                                break;
+ 415   9                                                                      }
+ 416   8                                                                }
+ 417   7                                                               AS608_Cmd_Get_Img(); //»ñµÃÖ¸ÎÆÍ¼Ïñ
+ 418   7                                                               AS608_Receive_Data(12);
+ 419   7                                                              //ÅÐ¶Ï½ÓÊÕµ½µÄÈ·ÈÏÂë,µÈÓÚ0Ö¸ÎÆ»ñÈ¡³É¹¦
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 8   
+
+ 420   7                                                              if(AS608_RECEICE_BUFFER[9]==0)
+ 421   7                                                              {
+ 422   8                                                              Delay_ms(200);
+ 423   8                                                              LCD1602_Display(0x80,"Successful entry",0,16);
+ 424   8                                                              LCD1602_Display(0xc0,"    ID is       ",0,16);
+ 425   8                                                               //Ö¸ÎÆiDÖµÏÔÊ¾´¦Àí
+ 426   8                                                               LCD1602_WriteCMD(0xc0+10);
+ 427   8                                                               LCD1602_WriteDAT(finger_id/100+48);
+ 428   8                                                               LCD1602_WriteDAT(finger_id%100/10+48);
+ 429   8                                                               LCD1602_WriteDAT(finger_id%100%10+48);
+ 430   8                                                              FINGERPRINT_Cmd_Img_To_Buffer2();
+ 431   8                                                                AS608_Receive_Data(12);
+ 432   8                                                              AS608_Cmd_Reg_Model();//×ª»»³ÉÌØÕ÷Âë
+ 433   8                                                       AS608_Receive_Data(12);
+ 434   8                                                                AS608_Cmd_Save_Finger(finger_id);               
+             -                          
+ 435   8                                                        AS608_Receive_Data(12);
+ 436   8                                                              Beep_Times(1);
+ 437   8                                                              Delay_ms(1000);
+ 438   8                                                              finger_id=finger_id+1;
+ 439   8                                                          break;
+ 440   8                                                                }
+ 441   7                                                         }
+ 442   6                                                         break;
+ 443   6                                              }
+ 444   5                                      }
+ 445   4                      }
+ 446   3                      }
+ 447   2              }
+ 448   1      }
+ 449          
+ 450          //ËÑË÷Ö¸ÎÆ
+ 451          void AS608_Find_Fingerprint()
+ 452          {
+ 453   1              unsigned int find_fingerid = 0;
+ 454   1              unsigned char id_show[]={0,0,0};
+ 455   1              do
+ 456   1              {
+ 457   2                      LCD1602_Display(0x80," Please  finger ",0,16);
+ 458   2                      LCD1602_Display(0xc0,"                ",0,16);
+ 459   2                      AS608_Cmd_Get_Img(); //»ñµÃÖ¸ÎÆÍ¼Ïñ
+ 460   2                      AS608_Receive_Data(12);               
+ 461   2                      //ÅÐ¶Ï½ÓÊÕµ½µÄÈ·ÈÏÂë,µÈÓÚ0Ö¸ÎÆ»ñÈ¡³É¹¦
+ 462   2                      if(AS608_RECEICE_BUFFER[9]==0)
+ 463   2                      {                        
+ 464   3                              Delay_ms(100);
+ 465   3                              FINGERPRINT_Cmd_Img_To_Buffer1();
+ 466   3                              AS608_Receive_Data(12);               
+ 467   3                              AS608_Cmd_Search_Finger();
+ 468   3                              AS608_Receive_Data(16);                        
+ 469   3                              if(AS608_RECEICE_BUFFER[9] == 0) //ËÑË÷µ½  
+ 470   3                              {
+ 471   4                                      //½âËø³É¹¦//
+ 472   4                                      
+ 473   4                                      LCD1602_Display(0x80," Search success ",0,16);
+ 474   4                                      LCD1602_Display(0xc0,"    ID is       ",0,16);
+ 475   4                                      Beep_Times(1);                                       
+ 476   4                                      //Æ´½ÓÖ¸ÎÆIDÊý
+ 477   4                                      find_fingerid = AS608_RECEICE_BUFFER[10]*256 + AS608_RECEICE_BUFFER[11];  
+             -                                     
+ 478   4                                       //Ö¸ÎÆiDÖµÏÔÊ¾´¦Àí
+ 479   4                                       LCD1602_WriteCMD(0xc0+10);
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 9   
+
+ 480   4                                       LCD1602_WriteDAT(find_fingerid/100+48);
+ 481   4                                       LCD1602_WriteDAT(find_fingerid%100/10+48);
+ 482   4                                       LCD1602_WriteDAT(find_fingerid%100%10+48);
+ 483   4                                      //ÅäÖÃIO¿Ú£¬Ö´ÐÐ¿ªËø²Ù×÷
+ 484   4                                      if(flag)
+ 485   4                                      {
+ 486   5                                      P1=0xfe;                                                
+ 487   5                                      Delay_ms(3800);
+ 488   5                                      P1=0xff;        //µç¶¯»úÍ£Ö¹×ª¶¯
+ 489   5                                      Delay_ms(1000);
+ 490   5                                      P1=0xfd;        //µç¶¯»ú·´×ª¸´Î»
+ 491   5                                      Delay_ms(3600);//µç»úÕý×ª×èÁ¦Ô¶´óÓÚ·´×ª£¬Ðý×ªÏàÍ¬½Ç¶ÈÊ±£¬Õý×ªÐèÒª¸ü¶àÊ±¼ä 
+             -       
+ 492   5                                      P1=0xff;        //µç¶¯»úÍ£Ö¹×ª¶¯
+ 493   5                                      }
+ 494   4                                      flag=1;        //ÔÊÐíºóÐøÏà¹Ø²Ù×÷£ºÌí¼Ó»òÉ¾³ýÖ¸ÎÆÄ£°å
+ 495   4                                      break;                                                        
+ 496   4                              }
+ 497   3                              else //Ã»ÓÐÕÒµ½
+ 498   3                              {
+ 499   4                                              LCD1602_Display(0x80," Search  failed ",0,16);
+ 500   4                                              LCD1602_Display(0xc0,"                ",0,16);
+ 501   4                                               Beep_Times(3);
+ 502   4                              }
+ 503   3                              }               
+ 504   2                      }while(KEY_CANCEL == 1);
+ 505   1      }
+ 506          //É¾³ýËùÓÐ´æÖüµÄÖ¸ÎÆ¿â
+ 507          void AS608_Delete_All_Fingerprint()
+ 508          {
+ 509   1                      unsigned char i=0;
+ 510   1                                      LCD1602_Display(0x80,"   empty all    ",0,16);
+ 511   1                                      LCD1602_Display(0xc0,"   Yes or no ?  ",0,16);
+ 512   1                      do
+ 513   1                       {
+ 514   2                              if(KEY_OK==0)
+ 515   2                              {
+ 516   3                              Delay_ms(5);
+ 517   3                              if(KEY_OK==0)
+ 518   3                              {
+ 519   4                                      while(KEY_OK==0);
+ 520   4                                      LCD1602_Display(0x80,"   emptying     ",0,16);
+ 521   4                                      LCD1602_Display(0xc0,"                ",0,16);
+ 522   4                                      Delay_ms(300);
+ 523   4                                      LCD1602_WriteCMD(0xc0);
+ 524   4                                      for(i=0;i<16;i++)
+ 525   4                                       {
+ 526   5                                              LCD1602_WriteDAT(42);// ¼´'*'
+ 527   5                                              Delay_ms(100);
+ 528   5                                       }
+ 529   4                                      FINGERPRINT_Cmd_Delete_All_Model();
+ 530   4                                        AS608_Receive_Data(12);
+ 531   4                                      LCD1602_Display(0x80,"   All empty    ",0,16);
+ 532   4                                      LCD1602_Display(0xc0,"                ",0,16);
+ 533   4                                      Beep_Times(3);
+ 534   4                                      break;
+ 535   4                              }
+ 536   3                              }
+ 537   2                       }while(KEY_CANCEL==1);
+ 538   1      }
+ 539          
+ 540          void Device_Check(void)
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 10  
+
+ 541          {
+ 542   1                      unsigned char i=0;
+ 543   1                      AS608_RECEICE_BUFFER[9]=1;                                           //´®¿ÚÊý×éµÚ¾ÅÎ»¿ÉÅÐ¶
+             -ÏÊÇ·ñÍ¨ÐÅÕý³£
+ 544   1                      LCD1602_Display(0xc0,"Loading",0,7);                   //Éè±¸¼ÓÔØÖÐ½çÃæ                   
+             -                                        
+ 545   1                      for(i=0;i<8;i++)                                                           //½ø¶ÈÌõÊ½¸üÐÂ£
+             -¬¿´ÆðÀ´ÃÀ¹Û
+ 546   1                      {
+ 547   2                              LCD1602_WriteDAT(42);                               //42¶ÔÓ¦ASICÂëµÄ *
+ 548   2                              Delay_ms(20);                                                           //¿ØÖÆ½ø¶È
+             -ÌõËÙ¶È
+ 549   2                      }                                                                        
+ 550   1                      LCD1602_Display(0xc0,"Docking  failure",0,16);      //Òº¾§ÏÈÏÔÊ¾¶Ô½ÓÊ§°Ü£¬Èç¹ûÖ¸ÎÆÄ£¿é²å¶Ô
+             -µÄ»°»á½«Æä¸²¸Ç        
+ 551   1                      AS608_Cmd_Check();                                                                //µ¥Æ¬»ú
+             -ÏòÖ¸ÎÆÄ£¿é·¢ËÍÐ£¶ÔÃüÁî
+ 552   1                      AS608_Receive_Data(12);                                                        //½«´®¿Ú½ÓÊ
+             -Õµ½µÄÊý¾Ý×ª´æ
+ 553   1                       if(AS608_RECEICE_BUFFER[9] == 0)                                        //ÅÐ¶ÏÊý¾ÝµÍµÚ9Î»
+             -ÊÇ·ñ½ÓÊÕµ½0
+ 554   1                      {
+ 555   2                              LCD1602_Display(0xc0,"Docking  success",0,16);        //·ûºÏ³É¹¦Ìõ¼þÔòÏÔÊ¾¶Ô½Ó³É¹¦
+ 556   2                      }
+ 557   1      }
+ 558          
+ 559          //Ö÷º¯Êý
+ 560          void main()
+ 561          {                                                        
+ 562   1              finger_id=0;
+ 563   1              LCD1602_Init();                        //³õÊ¼»¯Òº¾§
+ 564   1              LCD1602_Display(0x80,"Fingerprint Test",0,16);         //Òº¾§¿ª»úÏÔÊ¾½çÃæ
+ 565   1                Uart_Init();                        //³õÊ¼»¯´®¿Ú
+ 566   1              Key_Init();                                //³õÊ¼»¯°´¼ü
+ 567   1               Delay_ms(200);          //ÑÓÊ±500MS£¬µÈ´ýÖ¸ÎÆÄ£¿é¸´Î»
+ 568   1              Device_Check();                           //Ð£¶ÔÖ¸ÎÆÄ£¿éÊÇ·ñ½ÓÈëÕýÈ·£¬Òº¾§×ö³öÏàÓ¦µÄÌáÊ¾
+ 569   1              Delay_ms(1000);                        //¶Ô½Ó³É¹¦½çÃæÍ£ÁôÒ»¶¨Ê±¼ä
+ 570   1              while(1)
+ 571   1              {
+ 572   2                  
+ 573   2                      /**************½øÈëÖ÷¹¦ÄÜ½çÃæ****************/
+ 574   2                      LCD1602_Display(0x80,"  search finger ",0,16);         //µÚÒ»ÅÅÏÔÊ¾ËÑË÷Ö¸ÎÆ
+ 575   2                      LCD1602_Display(0xc0,"  Add     delete",0,16);         //Ìí¼ÓºÍÉ¾³ýÖ¸ÎÆ
+ 576   2                      if(local_date==0)
+ 577   2                      {
+ 578   3                              LCD1602_Display(0x80,  " *",0,2);
+ 579   3                              LCD1602_Display(0xc0,  "  ",0,2);
+ 580   3                              LCD1602_Display(0xc0+8,"  ",0,2);        
+ 581   3                      }
+ 582   2                      else if(local_date==1)
+ 583   2                      {
+ 584   3                              LCD1602_Display(0x80,  "  ",0,2);
+ 585   3                              LCD1602_Display(0xc0,  " *",0,2);
+ 586   3                              LCD1602_Display(0xc0+8,"  ",0,2);        
+ 587   3                      }
+ 588   2                      else if(local_date==2)
+ 589   2                      {
+ 590   3                              LCD1602_Display(0x80,  "  ",0,2);
+ 591   3                              LCD1602_Display(0xc0,  "  ",0,2);
+ 592   3                              LCD1602_Display(0xc0+8," *",0,2);        
+ 593   3                      }                        
+ 594   2                      //È·ÈÏ¼ü
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 11  
+
+ 595   2                      if(KEY_OK == 0)
+ 596   2                      {
+ 597   3                      Delay_ms(5);
+ 598   3                      if(KEY_OK == 0)
+ 599   3                      {         
+ 600   4                               while(KEY_OK == 0);//µÈ´ýËÉ¿ª°´¼ü                                                
+             -               
+ 601   4                              switch(local_date)
+ 602   4                              {
+ 603   5                                              case 0:  //ËÑË÷Ö¸ÎÆ        
+ 604   5                                              flag=1;                                       
+ 605   5                                              AS608_Find_Fingerprint();                                         
+             -                                                                                                                        
+             -                               
+ 606   5                                              break;        
+ 607   5                                             
+ 608   5                                              case 1:         //Ìí¼ÓÖ¸ÎÆ
+ 609   5                                              flag=1;        //flag=1£¬ÈôÖ¸ÎÆ¿âÎª¿Õ£¬Ôò¿ÉÒÔÖ±½ÓÌí¼ÓÖ¸ÎÆ         
+             -                       
+ 610   5                                              if(AS608_number_of_fingers())
+ 611   5                                              {
+ 612   6                                                      flag=0;//flagÖÃ0ÓÉÁ½ÖØ×÷ÓÃ£º
+ 613   6                                                      //1¡¢Ö¸ÎÆ¿âÖÐÒÑÓÐÖ¸ÎÆ£¬ÔòÐèÒªËÑË÷Æ¥Åä³É¹¦£¬ÓÉAS608_Find_Fi
+             -ngerprint()½«flagÖÃ1£¬²ÅÄÜÌí¼ÓÖ¸ÎÆ
+ 614   6                                                      //2¡¢flag=0£¬ÔòÔÚËÑË÷Ö¸ÎÆ³É¹¦ºó²»Ö´ÐÐ¿ªËø²Ù×÷
+ 615   6                                                      AS608_Find_Fingerprint();
+ 616   6                                              }
+ 617   5                                              if(flag)
+ 618   5                                              {
+ 619   6                                                      AS608_Add_Fingerprint();
+ 620   6                                              }
+ 621   5                                              break;                                         
+ 622   5                                             
+ 623   5                                              case 2:        //Çå¿ÕÖ¸ÎÆ
+ 624   5                                              flag=0;        //1¡¢ÔÚËÑË÷Ö¸ÎÆ³É¹¦ºó²»Ö´ÐÐ¿ªËø²Ù×÷£»2¡¢ÈôËÑË÷²»³É¹
+             -¦£¬²»Ö´ÐÐÇå¿Õ²Ù×÷
+ 625   5                                              AS608_Find_Fingerprint();//ËÑË÷Æ¥Åä³É¹¦ºó£¬º¯ÊýÄÚ²¿½«flagÖÃ1£¬²ÅÄÜ
+             -Çå¿ÕÖ¸ÎÆ¿â
+ 626   5                                              if(flag)
+ 627   5                                              {
+ 628   6                                                      AS608_Delete_All_Fingerprint();
+ 629   6                                                }
+ 630   5                                              break;
+ 631   5                              }
+ 632   4                      }
+ 633   3                      }
+ 634   2                          //ÇÐ»»¼ü
+ 635   2                              if(KEY_DOWN == 0)
+ 636   2                              {
+ 637   3                              Delay_ms(5);
+ 638   3                              if(KEY_DOWN == 0)
+ 639   3                              {
+ 640   4                                       while(KEY_DOWN == 0); //µÈ´ýËÉ¿ª°´¼ü                                
+ 641   4                                         if(local_date<=2)
+ 642   4                                      {
+ 643   5                                              local_date++;
+ 644   5                                              if(local_date==3) local_date=0;                                   
+             -             
+ 645   5                                      }               
+ 646   4                              }
+ 647   3                              }                                                
+ 648   2                              Delay_ms(100); //ÑÓÊ±ÅÐ¶Ï100MS¼ì²âÒ»´Î               
+C51 COMPILER V9.59.0.0   TEST1                                                             10/09/2021 10:18:35 PAGE 12  
+
+ 649   2              }
+ 650   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2214    ----
+   CONSTANT SIZE    =    368    ----
+   XDATA SIZE       =     45      21
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

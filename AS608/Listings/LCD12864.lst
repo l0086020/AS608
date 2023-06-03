@@ -1,0 +1,80 @@
+C51 COMPILER V9.59.0.0   LCD12864                                                          10/14/2021 18:54:11 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE LCD12864
+OBJECT MODULE PLACED IN .\Objects\LCD12864.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE LCD12864.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Lis
+                    -tings\LCD12864.lst) TABS(2) OBJECT(.\Objects\LCD12864.obj)
+
+line level    source
+
+   1          #include <LCD12864.h>
+   2          
+   3          void lcd_wcmd(uchar cmd)
+   4          {   
+   5   1          LCD_RS = 0;
+   6   1          LCD_RW = 0;
+   7   1          LCD_EN = 0;
+   8   1          P0 = cmd;
+   9   1          Delay_ms(1);
+  10   1          LCD_EN = 1;
+  11   1          Delay_ms(1);
+  12   1          LCD_EN = 0;
+  13   1      }
+  14          
+  15          void lcd_wdat(uchar dat)
+  16          {
+  17   1          LCD_RS = 1;
+  18   1          LCD_RW = 0;
+  19   1          LCD_EN = 0;
+  20   1          P0 = dat;
+  21   1          Delay_ms(1);
+  22   1          LCD_EN = 1;
+  23   1          Delay_ms(1);
+  24   1          LCD_EN = 0; 
+  25   1      }
+  26          
+  27          void lcd_init()
+  28          { 
+  29   1          LCD_PSB = 1;
+  30   1          lcd_wcmd(0x34);
+  31   1          Delay_ms(5);
+  32   1          lcd_wcmd(0x30);
+  33   1          Delay_ms(5);
+  34   1          lcd_wcmd(0x0c);
+  35   1          Delay_ms(5);
+  36   1          lcd_wcmd(0x01);
+  37   1          Delay_ms(5);
+  38   1      }
+  39          
+  40          void display(uchar X,uchar Y,uchar *Z)
+  41          {
+  42   1        uchar pos;
+  43   1        if (X==0){X=0x80;}
+  44   1        else if (X==1){X=0x90;}
+  45   1        else if (X==2){X=0x88;}
+  46   1        else if (X==3){X=0x98;}
+  47   1        pos = X+Y;  
+  48   1        lcd_wcmd(pos);
+  49   1        while(*Z != '\0')
+  50   1        {
+  51   2          lcd_wdat(*Z);
+  52   2          Z++;
+  53   2        }
+  54   1      }
+C51 COMPILER V9.59.0.0   LCD12864                                                          10/14/2021 18:54:11 PAGE 2   
+
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    192    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----       3
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,10 @@
+".\Objects\delay.obj",
+".\Objects\main.obj",
+".\Objects\Uart.obj",
+".\Objects\Key.obj",
+".\Objects\Beep.obj",
+".\Objects\LCD12864.obj",
+".\Objects\AS608.obj",
+".\Objects\NVIC.obj" 
+TO ".\Objects\Test" 
+PRINT(".\Listings\Test.m51") RAMSIZE(256) 

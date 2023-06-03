@@ -1,0 +1,33 @@
+C51 COMPILER V9.59.0.0   KEY                                                               10/14/2021 18:54:10 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE KEY
+OBJECT MODULE PLACED IN .\Objects\Key.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Key.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings
+                    -\Key.lst) TABS(2) OBJECT(.\Objects\Key.obj)
+
+line level    source
+
+   1          #include <Key.h>
+   2          
+   3          void Key_Init(void)
+   4          {
+   5   1        KEY_DOWN=1;                // 下一项
+   6   1        KEY_UP=1;                 //上一项
+   7   1        KEY_OK=1;                // 确认
+   8   1        KEY_CANCEL=1;        // 取消
+   9   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =      9    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
